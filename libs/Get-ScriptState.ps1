@@ -8,7 +8,7 @@ function Get-ScriptState {
         try {
             $saved = Get-Content -Path $Path -Raw | ConvertFrom-Json
             return [pscustomobject]@{
-                CurrentOuIndex = [int]$saved.CurrentOuIndex
+                CompletedOuDistinguishedNames = @($saved.CompletedOuDistinguishedNames)
                 ProcessedDistinguishedNames   = @($saved.ProcessedDistinguishedNames)
                 FailedDistinguishedNames      = @($saved.FailedDistinguishedNames)
             }
@@ -18,7 +18,7 @@ function Get-ScriptState {
     }
 
     return [pscustomobject]@{
-        CurrentOuIndex = 0
+        CompletedOuDistinguishedNames = @()
         ProcessedDistinguishedNames   = @()
         FailedDistinguishedNames      = @()
     }

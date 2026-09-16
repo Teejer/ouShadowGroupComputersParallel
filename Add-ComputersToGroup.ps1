@@ -59,27 +59,24 @@ if ($GroupName) {
 
 $state = Get-ScriptState -Path $StatePath
 
-if ($state.CurrentOuIndex -ge $entries.Count) {
-    Write-Log -Message 'All OUs in the list are complete. Use -ResetState to start over.' -LogPath $LogPath
-    exit 0
-}
-
 $groupCache = @{}
 $memberDistinguishedNamesCache = @{}
 $processedDistinguishedNames = ConvertTo-DistinguishedNameSet -DistinguishedNames @($state.ProcessedDistinguishedNames)
 $failedDistinguishedNames = ConvertTo-DistinguishedNameSet -DistinguishedNames @($state.FailedDistinguishedNames)
+$completedOuDistinguishedNames = ConvertTo-DistinguishedNameSet -DistinguishedNames @($state.CompletedOuDistinguishedNames)
 
-$added = 0
-$loggedEntry = ''
+$pendingEntries = @($entries | Where-Object { -not $completedOuDistinguishedNames.Contains($_.OuDistinguishedName) })
 
-while ($added -lt $BatchSize -and $state.CurrentOuIndex -lt $entries.Count) {
-    $entry = $entries[$state.CurrentOuIndex]
+if ($pendingEntries.Count -eq 0) {
+    Write-Log -Message 'All OUs in the list are complete. Use -ResetState to start over.' -LogPath $LogPath
+    exit 0
+}
+
+$totalAdded = 0
+
+foreach ($entry in $pendingEntries) {
     $entryLabel = "$($entry.OuDistinguishedName) -> $($entry.GroupName)"
-
-    if ($loggedEntry -ne $entryLabel) {
-        Write-Log -Message "Processing $entryLabel" -LogPath $LogPath
-        $loggedEntry = $entryLabel
-    }
+    Write-Log -Message "Processing $entryLabel" -LogPath $LogPath
 
     if (-not $groupCache.ContainsKey($entry.GroupName)) {
         $resolved = Resolve-TargetGroup -GroupName $entry.GroupName -LogPath $LogPath
@@ -92,7 +89,7 @@ while ($added -lt $BatchSize -and $state.CurrentOuIndex -lt $entries.Count) {
     $group = $groupCache[$entry.GroupName]
     if (-not $group) {
         Write-Log -Message "Skipping OU '$($entry.OuDistinguishedName)': group '$($entry.GroupName)' could not be resolved." -Level ERROR -LogPath $LogPath
-        $state.CurrentOuIndex++
+        [void]$completedOuDistinguishedNames.Add($entry.OuDistinguishedName)
         continue
     }
 
@@ -103,22 +100,36 @@ while ($added -lt $BatchSize -and $state.CurrentOuIndex -lt $entries.Count) {
     $candidates = @(Get-NextComputers -OuDistinguishedName $entry.OuDistinguishedName -SortBy $SortBy -ExcludeDistinguishedNames $excludeDistinguishedNames -IncludeSubOus:$IncludeSubOus)
 
     if ($candidates.Count -eq 0) {
-        Write-Log -Message "Finished OU '$($entry.OuDistinguishedName)'. Moving to next OU." -LogPath $LogPath
-        $state.CurrentOuIndex++
+        Write-Log -Message "Finished OU '$($entry.OuDistinguishedName)': no pending computers left." -LogPath $LogPath
+        [void]$completedOuDistinguishedNames.Add($entry.OuDistinguishedName)
         continue
     }
 
-    $computer = $candidates[0]
-    $outcome = Add-NextComputer -Computer $computer -Group $group -GroupDistinguishedName $groupDistinguishedName -MemberDistinguishedNames $memberDistinguishedNames -ProcessedDistinguishedNames $processedDistinguishedNames -FailedDistinguishedNames $failedDistinguishedNames -AddLogPath $AddLogPath -ErrorLogPath $ErrorLogPath -LogPath $LogPath
-    if ($outcome -eq 'Added') {
-        $added++
+    $addedForOu = 0
+    foreach ($computer in $candidates) {
+        if ($addedForOu -ge $BatchSize) {
+            break
+        }
+
+        $outcome = Add-NextComputer -Computer $computer -Group $group -GroupDistinguishedName $groupDistinguishedName -MemberDistinguishedNames $memberDistinguishedNames -ProcessedDistinguishedNames $processedDistinguishedNames -FailedDistinguishedNames $failedDistinguishedNames -AddLogPath $AddLogPath -ErrorLogPath $ErrorLogPath -LogPath $LogPath
+        if ($outcome -eq 'Added') {
+            $addedForOu++
+            $totalAdded++
+        }
+    }
+
+    if ($addedForOu -lt $BatchSize) {
+        Write-Log -Message "Finished OU '$($entry.OuDistinguishedName)': batch not full, no more pending computers." -LogPath $LogPath
+        [void]$completedOuDistinguishedNames.Add($entry.OuDistinguishedName)
+    } else {
+        Write-Log -Message "Batch of $BatchSize reached for OU '$($entry.OuDistinguishedName)'; it continues next run." -LogPath $LogPath
     }
 }
 
-Save-ScriptState -Path $StatePath -CurrentOuIndex $state.CurrentOuIndex -ProcessedDistinguishedNames @($processedDistinguishedNames) -FailedDistinguishedNames @($failedDistinguishedNames)
+Save-ScriptState -Path $StatePath -CompletedOuDistinguishedNames @($completedOuDistinguishedNames) -ProcessedDistinguishedNames @($processedDistinguishedNames) -FailedDistinguishedNames @($failedDistinguishedNames)
 
-Write-Log -Message "Run finished. Added $added computer(s). OU progress: index $($state.CurrentOuIndex) of $($entries.Count)." -LogPath $LogPath
+Write-Log -Message "Run finished. Added $totalAdded computer(s). Completed OUs: $($completedOuDistinguishedNames.Count) of $($entries.Count)." -LogPath $LogPath
 
-if ($state.CurrentOuIndex -ge $entries.Count) {
+if ($completedOuDistinguishedNames.Count -ge $entries.Count) {
     Write-Log -Message 'All OUs in the list are now complete.' -LogPath $LogPath
 }

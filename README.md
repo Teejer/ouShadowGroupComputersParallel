@@ -13,13 +13,15 @@ This repo is designed to be used together with a Group Policy Object:
    script) instead of `Authenticated Users`.
 2. Only computers that are members of that group apply (and be affected by)
    the GPO.
-3. This script adds computers to the group **5 at a time** (configurable),
-   once per run, when scheduled as a daily task.
+3. This script adds computers to the group **5 at a time per OU**
+   (configurable), once per run, when scheduled as a daily task.
 
 The result is a slow, staged rollout: instead of every computer in every OU
 applying the new policy within one or two policy refresh cycles of each
-other, only a handful of machines pick it up each day, so problems are
-caught early with minimal blast radius.
+other, only a handful of machines per OU pick it up each day, so problems
+are caught early with minimal blast radius. All OUs in the list advance in
+parallel (one batch each) rather than one OU being drained completely
+before the next one starts.
 
 ## Usage
 
@@ -52,10 +54,12 @@ Ou,Group
 "OU=Workstations,OU=Engineering,DC=contoso,DC=com","Deny-Login-Engineering"
 ```
 
-The script always works through the list from top to bottom: an OU is only
-touched once every computer in the OUs above it has been handled. If a
-row's group cannot be resolved, that row is skipped with an error logged
-and the rollout continues with the next row.
+On every run the script walks through **all** rows of the list and adds up
+to `-BatchSize` computers for each OU that is not finished yet; a batch in
+one OU does not have to wait for another OU to be drained first. Once an
+OU has no pending computers left it is marked complete and skipped on
+later runs. If a row's group cannot be resolved, that row is skipped with
+an error logged and the rollout continues with the next row.
 
 ## Parameters
 
@@ -63,7 +67,7 @@ and the rollout continues with the next row.
 | ---------------- | ------------------------------ | -------------------------------------------------- |
 | `-GroupName`     | (none)                         | Override: send every OU to this group instead of the group column in the CSV. |
 | `-CsvPath`       | `.\ous.csv`                    | Ordered list of OUs.                               |
-| `-BatchSize`     | `5`                            | Computers added per run.                           |
+| `-BatchSize`     | `5`                            | Computers added per run, per OU.                   |
 | `-SortBy`        | `Name`                         | Property used to order computers within an OU.     |
 | `-IncludeSubOus` | off                            | Also pick up computers in child OUs.               |
 | `-StatePath`     | `.\state.json`                 | Progress file between runs.                        |
@@ -77,10 +81,12 @@ Log file names get a monthly stamp appended automatically, e.g.
 
 ## Logs and state
 
-- `state.json` — tracks the current OU position plus processed and failed
+- `state.json` — tracks which OUs are complete plus processed and failed
   computer accounts so each daily run knows where it left off. Failed
   computers are recorded and skipped on later runs so they never block the
-  rollout.
+  rollout. (Older state files with a `CurrentOuIndex` field still work:
+  the index is ignored, and already-processed computers are never added
+  twice.)
 - `added-computers_yyyy_MM.log` — CSV: timestamp, group name, group
   distinguished name, computer name, computer distinguished name, for every
   computer added.
