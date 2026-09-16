@@ -69,7 +69,7 @@ an error logged and the rollout continues with the next row.
 | `-CsvPath`       | `.\ous.csv`                    | Ordered list of OUs.                               |
 | `-BatchSize`     | `5`                            | Computers added per run, per OU.                   |
 | `-SortBy`        | `Name`                         | Property used to order computers within an OU.     |
-| `-IncludeSubOus` | off                            | Also pick up computers in child OUs.               |
+| `-DirectMembersOnly` | off                        | Only pick up computers directly in the listed OU; by default nested child OUs (e.g. `OU=Servers,...`) are included too. |
 | `-StatePath`     | `.\state.json`                 | Progress file between runs.                        |
 | `-LogPath`       | `.\Add-ComputersToGroup.log`   | General activity log.                              |
 | `-AddLogPath`    | `.\added-computers.log`        | One record per successful add.                     |

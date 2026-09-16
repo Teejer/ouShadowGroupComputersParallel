@@ -8,7 +8,7 @@ param(
     [string]$ErrorLogPath = 'add-errors.log',
     [ValidateRange(1, 100)][int]$BatchSize = 5,
     [string]$SortBy = 'Name',
-    [switch]$IncludeSubOus,
+    [switch]$DirectMembersOnly,
     [switch]$ResetState
 )
 
@@ -97,7 +97,7 @@ foreach ($entry in $pendingEntries) {
     $memberDistinguishedNames = $memberDistinguishedNamesCache[$groupDistinguishedName]
 
     $excludeDistinguishedNames = @($processedDistinguishedNames) + @($failedDistinguishedNames)
-    $candidates = @(Get-NextComputers -OuDistinguishedName $entry.OuDistinguishedName -SortBy $SortBy -ExcludeDistinguishedNames $excludeDistinguishedNames -IncludeSubOus:$IncludeSubOus)
+    $candidates = @(Get-NextComputers -OuDistinguishedName $entry.OuDistinguishedName -SortBy $SortBy -ExcludeDistinguishedNames $excludeDistinguishedNames -DirectMembersOnly:$DirectMembersOnly)
 
     if ($candidates.Count -eq 0) {
         Write-Log -Message "Finished OU '$($entry.OuDistinguishedName)': no pending computers left." -LogPath $LogPath

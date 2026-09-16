@@ -3,11 +3,11 @@ function Get-NextComputers {
     param(
         [Parameter(Mandatory)][string]$OuDistinguishedName,
         [string]$SortBy = 'Name',
-        [string[]]$ExcludeDistinguishedNames = @(),
-        [switch]$IncludeSubOus
-    )
+    [string[]]$ExcludeDistinguishedNames = @(),
+    [switch]$DirectMembersOnly
+)
 
-    $searchScope = if ($IncludeSubOus) { 'Subtree' } else { 'OneLevel' }
+    $searchScope = if ($DirectMembersOnly) { 'OneLevel' } else { 'Subtree' }
 
     $computers = @(Get-ADComputer -Filter * -SearchBase $OuDistinguishedName -SearchScope $searchScope -ErrorAction Stop)
 
