@@ -31,9 +31,6 @@ before the next one starts.
 
 # Send every OU to one group regardless of the CSV column
 .\Add-ComputersToGroup.ps1 -GroupName "Deny-Login"
-
-# Start the whole rollout over from the first OU
-.\Add-ComputersToGroup.ps1 -ResetState
 ```
 
 Requires the ActiveDirectory (RSAT) PowerShell module and must run on a
@@ -55,11 +52,14 @@ Ou,Group
 ```
 
 On every run the script walks through **all** rows of the list and adds up
-to `-BatchSize` computers for each OU that is not finished yet; a batch in
-one OU does not have to wait for another OU to be drained first. Once an
-OU has no pending computers left it is marked complete and skipped on
-later runs. If a row's group cannot be resolved, that row is skipped with
-an error logged and the rollout continues with the next row.
+to `-BatchSize` computers for each OU that still has pending work; a batch
+in one OU does not have to wait for another OU to be drained first. An OU
+is considered done when every computer in it is already a member of its
+target group — this is checked against Active Directory on each run, so you
+can add, remove or reorder rows at any time, even mid-rollout (see
+*Progress tracking* below). If a row's group cannot be resolved, that row
+is skipped with an error logged and the rollout continues with the next
+row.
 
 ## Parameters
 
@@ -70,23 +70,38 @@ an error logged and the rollout continues with the next row.
 | `-BatchSize`     | `5`                            | Computers added per run, per OU.                   |
 | `-SortBy`        | `Name`                         | Property used to order computers within an OU.     |
 | `-DirectMembersOnly` | off                        | Only pick up computers directly in the listed OU; by default nested child OUs (e.g. `OU=Servers,...`) are included too. |
-| `-StatePath`     | `.\state.json`                 | Progress file between runs.                        |
 | `-LogPath`       | `.\Add-ComputersToGroup.log`   | General activity log.                              |
 | `-AddLogPath`    | `.\added-computers.log`        | One record per successful add.                     |
 | `-ErrorLogPath`  | `.\add-errors.log`             | One record per failure.                            |
-| `-ResetState`    | off                            | Delete progress and start over.                    |
 
 Log file names get a monthly stamp appended automatically, e.g.
 `added-computers_2026_09.log`, so logs roll over each month.
 
-## Logs and state
+## Progress tracking (no state file)
 
-- `state.json` — tracks which OUs are complete plus processed and failed
-  computer accounts so each daily run knows where it left off. Failed
-  computers are recorded and skipped on later runs so they never block the
-  rollout. (Older state files with a `CurrentOuIndex` field still work:
-  the index is ignored, and already-processed computers are never added
-  twice.)
+The script is stateless. At the start of every run it reads, straight from
+Active Directory:
+
+- the computers currently in each listed OU, and
+- the members each target group currently has,
+
+then adds the first `-BatchSize` computers of the diff (computers in the OU
+that are **not** yet members of the group), for every OU in the list. Group
+membership *is* the progress record, so:
+
+- Adding, removing or reordering CSV rows at any time just works.
+- Computers already in the group (added by a previous run, or manually) are
+  never re-added.
+- Removing a computer from the group puts it back in the queue for the next
+  run.
+
+The only thing not remembered between runs is the failure list: a computer
+that could not be added (e.g. a permissions error) is retried on the next
+run. Within a single run a failed computer is skipped so it cannot block
+the rest of the batch, and every failure is recorded in the error log.
+
+## Logs
+
 - `added-computers_yyyy_MM.log` — CSV: timestamp, group name, group
   distinguished name, computer name, computer distinguished name, for every
   computer added.
@@ -104,13 +119,10 @@ ous.example.csv               Ordered OU + target group list template (copy to o
 libs/
   Import-Libs.ps1             Loads all lib files in one place
   Get-OuListFromCsv.ps1       Reads and validates the OU/group list
-  Get-ScriptState.ps1         Loads progress from state.json
-  Save-ScriptState.ps1        Persists progress to state.json
-  Reset-ScriptState.ps1       Deletes the progress file
-  Get-NextComputers.ps1       Ordered, not-yet-processed computers in an OU
+  Get-NextComputers.ps1       Computers in an OU minus an exclusion set, ordered
   Resolve-TargetGroup.ps1     Looks up a group, logs on failure
   Add-ComputerToGroup.ps1     Membership check + add for one computer
-  Add-NextComputer.ps1        Add/log one candidate computer, updates state sets
+  Add-NextComputer.ps1        Add/log one candidate computer, update member/failed sets
   ConvertTo-DistinguishedNameSet.ps1
                               Builds a deduplicating set of distinguished names
   Write-Log.ps1               General timestamped logging
@@ -128,4 +140,4 @@ Create a scheduled task that runs once a day, for example:
 powershell.exe -ExecutionPolicy Bypass -File C:\Scripts\ouShadowGroupComputers\Add-ComputersToGroup.ps1
 ```
 
-Runs become no-ops once every OU in the list has been completed.
+Runs become no-ops once every computer in the list is a member of its group.

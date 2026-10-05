@@ -5,7 +5,6 @@ function Add-NextComputer {
         [Parameter(Mandatory)]$Group,
         [Parameter(Mandatory)][string]$GroupDistinguishedName,
         [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.HashSet[string]]$MemberDistinguishedNames,
-        [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.HashSet[string]]$ProcessedDistinguishedNames,
         [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.HashSet[string]]$FailedDistinguishedNames,
         [Parameter(Mandatory)][string]$AddLogPath,
         [Parameter(Mandatory)][string]$ErrorLogPath,
@@ -16,7 +15,6 @@ function Add-NextComputer {
 
     try {
         $result = Add-ComputerToGroup -Computer $Computer -GroupDistinguishedName $GroupDistinguishedName -MemberDistinguishedNames $MemberDistinguishedNames
-        [void]$ProcessedDistinguishedNames.Add($computerDistinguishedName)
         if ($result -eq 'Added') {
             Write-AddLog -Path $AddLogPath -Computer $Computer -GroupName $Group.Name -GroupDistinguishedName $GroupDistinguishedName
             return 'Added'

@@ -6,9 +6,6 @@ $libsPath = Join-Path -Path $ScriptRoot -ChildPath 'libs'
 
 . (Join-Path $libsPath 'Write-Log.ps1')
 . (Join-Path $libsPath 'Get-OuListFromCsv.ps1')
-. (Join-Path $libsPath 'Get-ScriptState.ps1')
-. (Join-Path $libsPath 'Save-ScriptState.ps1')
-. (Join-Path $libsPath 'Reset-ScriptState.ps1')
 . (Join-Path $libsPath 'Get-NextComputers.ps1')
 . (Join-Path $libsPath 'Resolve-TargetGroup.ps1')
 . (Join-Path $libsPath 'Add-ComputerToGroup.ps1')

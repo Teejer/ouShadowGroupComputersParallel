@@ -3,16 +3,16 @@ function Get-NextComputers {
     param(
         [Parameter(Mandatory)][string]$OuDistinguishedName,
         [string]$SortBy = 'Name',
-    [string[]]$ExcludeDistinguishedNames = @(),
-    [switch]$DirectMembersOnly
-)
+        [string[]]$ExcludeDistinguishedNames = @(),
+        [switch]$DirectMembersOnly
+    )
 
     $searchScope = if ($DirectMembersOnly) { 'OneLevel' } else { 'Subtree' }
 
     $computers = @(Get-ADComputer -Filter * -SearchBase $OuDistinguishedName -SearchScope $searchScope -ErrorAction Stop)
 
     if ($computers.Count -gt 0 -and $ExcludeDistinguishedNames) {
-        $exclude = [System.Collections.Generic.HashSet[string]]::new()
+        $exclude = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         foreach ($distinguishedName in $ExcludeDistinguishedNames) {
             if ($distinguishedName) { [void]$exclude.Add($distinguishedName) }
         }
