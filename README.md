@@ -14,7 +14,8 @@ This repo is designed to be used together with a Group Policy Object:
 2. Only computers that are members of that group apply (and be affected by)
    the GPO.
 3. This script adds computers to the group **5 at a time per OU**
-   (configurable), once per run, when scheduled as a daily task.
+   (configurable globally with `-BatchSize`, or per row in the CSV), once
+   per run, when scheduled as a daily task.
 
 The result is a slow, staged rollout: instead of every computer in every OU
 applying the new policy within one or two policy refresh cycles of each
@@ -45,14 +46,21 @@ rolled out. The first column is the OU distinguished name, the second
 column is the security group that this OU's computers will be added to:
 
 ```csv
-Ou,Group
-"OU=Laptops,DC=contoso,DC=com","Deny-Login-Laptops"
-"OU=Desktops,DC=contoso,DC=com","Deny-Login-Desktops"
-"OU=Workstations,OU=Engineering,DC=contoso,DC=com","Deny-Login-Engineering"
+Ou,Group,Batch
+"OU=Laptops,DC=contoso,DC=com","Deny-Login-Laptops",10
+"OU=Desktops,DC=contoso,DC=com","Deny-Login-Desktops",
+"OU=Workstations,OU=Engineering,DC=contoso,DC=com","Deny-Login-Engineering",2
 ```
 
+The optional third column, `Batch`, sets how many computers that row adds
+per pass. A row that leaves it empty (or a CSV that has no third column at
+all) inherits the `-BatchSize` default, so you only set it where you want a
+row to deviate — e.g. a larger batch for a big OU or a cautious `1` or `2`
+for a sensitive one. Values must be whole numbers between 1 and 100.
+
 On every run the script walks through **all** rows of the list and adds up
-to `-BatchSize` computers for each OU that still has pending work; a batch
+to the row's batch size (its `Batch` column, or `-BatchSize` when the row
+leaves it blank) computers for each OU that still has pending work; a batch
 in one OU does not have to wait for another OU to be drained first. An OU
 is considered done when every computer in it is already a member of its
 target group — this is checked against Active Directory on each run, so you
@@ -67,7 +75,7 @@ row.
 | ---------------- | ------------------------------ | -------------------------------------------------- |
 | `-GroupName`     | (none)                         | Override: send every OU to this group instead of the group column in the CSV. |
 | `-CsvPath`       | `.\ous.csv`                    | Ordered list of OUs.                               |
-| `-BatchSize`     | `5`                            | Computers added per run, per OU.                   |
+| `-BatchSize`     | `5`                            | Default computers added per run, per OU. A row's `Batch` column in the CSV overrides it for that row. |
 | `-SortBy`        | `Name`                         | Property used to order computers within an OU.     |
 | `-DirectMembersOnly` | off                        | Only pick up computers directly in the listed OU; by default nested child OUs (e.g. `OU=Servers,...`) are included too. |
 | `-LogPath`       | `.\Add-ComputersToGroup.log`   | General activity log.                              |
@@ -85,8 +93,9 @@ Active Directory:
 - the computers currently in each listed OU, and
 - the members each target group currently has,
 
-then adds the first `-BatchSize` computers of the diff (computers in the OU
-that are **not** yet members of the group), for every OU in the list. Group
+then adds the first few computers of the diff (computers in the OU that are
+**not** yet members of the group) — as many as the row's batch size allows,
+for every OU in the list. Group
 membership *is* the progress record, so:
 
 - Adding, removing or reordering CSV rows at any time just works.

@@ -5,7 +5,7 @@ param(
     [string]$LogPath = 'Add-ComputersToGroup.log',
     [string]$AddLogPath = 'added-computers.log',
     [string]$ErrorLogPath = 'add-errors.log',
-    [ValidateRange(1, 100)][int]$BatchSize = 5,
+    [ValidateRange(1, 100)][int]$BatchSize = 5,  # Default per-OU batch; a row's Batch column in the CSV overrides it
     [string]$SortBy = 'Name',
     [switch]$DirectMembersOnly
 )
@@ -66,7 +66,10 @@ $pendingOusRemaining = 0
 
 foreach ($entry in $entries) {
     $entryLabel = "$($entry.OuDistinguishedName) -> $($entry.GroupName)"
-    Write-Log -Message "Processing $entryLabel" -LogPath $LogPath
+    # Per-row batch size from the CSV's optional third column; rows without
+    # one inherit the script-level -BatchSize default.
+    $batchSizeForEntry = if ($entry.BatchSize) { $entry.BatchSize } else { $BatchSize }
+    Write-Log -Message "Processing $entryLabel (batch size: $batchSizeForEntry)" -LogPath $LogPath
 
     if (-not $groupCache.ContainsKey($entry.GroupName)) {
         $resolved = Resolve-TargetGroup -GroupName $entry.GroupName -LogPath $LogPath
@@ -99,7 +102,7 @@ foreach ($entry in $entries) {
 
     $addedForOu = 0
     foreach ($computer in $candidates) {
-        if ($addedForOu -ge $BatchSize) {
+        if ($addedForOu -ge $batchSizeForEntry) {
             break
         }
         $outcome = Add-NextComputer -Computer $computer -Group $group -GroupDistinguishedName $groupDistinguishedName -MemberDistinguishedNames $memberDistinguishedNames -FailedDistinguishedNames $failedThisRun -AddLogPath $AddLogPath -ErrorLogPath $ErrorLogPath -LogPath $LogPath
@@ -109,9 +112,9 @@ foreach ($entry in $entries) {
         }
     }
 
-    if ($addedForOu -ge $BatchSize) {
+    if ($addedForOu -ge $batchSizeForEntry) {
         $pendingOusRemaining++
-        Write-Log -Message "Batch of $BatchSize reached for OU '$($entry.OuDistinguishedName)'; it continues next run." -LogPath $LogPath
+        Write-Log -Message "Batch of $batchSizeForEntry reached for OU '$($entry.OuDistinguishedName)'; it continues next run." -LogPath $LogPath
     }
 }
 

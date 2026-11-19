@@ -1,4 +1,4 @@
-Ou,Group
-"OU=Laptops,DC=contoso,DC=com","Deny-Login-Laptops"
-"OU=Desktops,DC=contoso,DC=com","Deny-Login-Desktops"
-"OU=Workstations,OU=Engineering,DC=contoso,DC=com","Deny-Login-Engineering"
+Ou,Group,Batch
+"OU=Laptops,DC=contoso,DC=com","Deny-Login-Laptops",10
+"OU=Desktops,DC=contoso,DC=com","Deny-Login-Desktops",
+"OU=Workstations,OU=Engineering,DC=contoso,DC=com","Deny-Login-Engineering",2
